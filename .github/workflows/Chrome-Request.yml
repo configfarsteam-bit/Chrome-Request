@@ -3,8 +3,8 @@ name: Chrome Domain Runner
 on:
   schedule:
     - cron: "7 * * * *"
-    - cron: "34 * * * *"
-    - cron: "52 * * * *"
+    - cron: "14 * * * *"
+    - cron: "20 * * * *"
   workflow_dispatch:
 
 concurrency:
