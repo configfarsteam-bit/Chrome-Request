@@ -1,0 +1,11 @@
+{
+  "name": "chrome-domain-runner",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "playwright-core": "1.49.1"
+  }
+}
