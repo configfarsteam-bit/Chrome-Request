@@ -1,11 +1,9 @@
 name: Chrome Domain Runner
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "7 * * * *"
-    - cron: "14 * * * *"
-    - cron: "20 * * * *"
-  workflow_dispatch:
 
 concurrency:
   group: chrome-domain-runner
@@ -14,106 +12,35 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  NODE_VERSION: "22"
+
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
 
-      - name: Install Playwright (+ Chrome if missing)
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Verify Google Chrome
         run: |
           set -euo pipefail
-          npm init -y >/dev/null
-          npm install --no-audit --no-fund playwright
-          if command -v google-chrome >/dev/null 2>&1; then
-            echo "Google Chrome already installed: $(google-chrome --version)"
-            npx playwright install-deps chrome
-          else
-            npx playwright install --with-deps chrome
-          fi
+          command -v google-chrome >/dev/null
+          google-chrome --version
 
       - name: Run Chrome
         env:
-          DOMAIN_NAME: ${{ vars.DOMAIN_NAME }}
-        run: |
-          set -euo pipefail
-          cat > run.js <<'EOF'
-          const { chromium } = require("playwright");
-
-          let domain = (process.env.DOMAIN_NAME || "").trim();
-          if (!domain) {
-            console.error("DOMAIN_NAME is not configured.");
-            process.exit(1);
-          }
-          if (!/^https?:\/\//i.test(domain)) {
-            domain = "https://" + domain;
-          }
-          try {
-            new URL(domain);
-          } catch {
-            console.error(`Invalid DOMAIN_NAME: (https://)`);
-            process.exit(1);
-          }
-
-          const randomInt = (min, max) =>
-            Math.floor(Math.random() * (max - min + 1)) + min;
-          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-          const NAV_TIMEOUT = 60000;
-
-          (async () => {
-            const totalSeconds = randomInt(180, 420);
-            const section = Math.floor(totalSeconds / 3);
-            console.log(`ok`);
-            console.log(`Total stay: ${totalSeconds}s, section: ${section}s`);
-
-            let browser;
-            let failed = false;
-            try {
-              browser = await chromium.launch({
-                channel: "chrome",
-                headless: true,
-                args: ["--no-sandbox", "--disable-dev-shm-usage"],
-              });
-              console.log(`Browser: ${browser.version()}`);
-
-              const page = await browser.newPage();
-              page.setDefaultNavigationTimeout(NAV_TIMEOUT);
-
-              const res = await page.goto(domain, { waitUntil: "domcontentloaded" });
-              console.log(`Initial status: ${res ? res.status() : "n/a"}`);
-              if (res && res.status() >= 400) failed = true;
-
-              for (let i = 1; i <= 3; i++) {
-                console.log(`Section ${i}/3 - ${section}s`);
-                await sleep(section * 1000);
-
-                console.log(`Refresh #${i}`);
-                try {
-                  const r = await page.reload({ waitUntil: "domcontentloaded" });
-                  console.log(`Status: ${r ? r.status() : "n/a"}`);
-                  if (r && r.status() >= 400) failed = true;
-                } catch (e) {
-                  console.error(`Refresh #${i} failed: ${e.message}`);
-                  failed = true;
-                }
-              }
-            } catch (e) {
-              console.error(`Error: ${e.message}`);
-              failed = true;
-            } finally {
-              if (browser) {
-                await browser.close().catch(() => {});
-                console.log("Chrome closed.");
-              }
-            }
-
-            process.exit(failed ? 1 : 0);
-          })();
-          EOF
-
-          node run.js
+          DOMAIN_NAME: ${{ secrets.DOMAIN_NAME }}
+        run: node run.js
