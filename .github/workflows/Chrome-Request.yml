@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "7 * * * *"
+    - cron: "14 * * * *"
+    - cron: "20 * * * *"
 
 concurrency:
   group: chrome-domain-runner
@@ -13,7 +15,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: "22"
+  PLAYWRIGHT_VERSION: "1.49.1"
 
 jobs:
   browser:
@@ -21,18 +23,27 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: package-lock.json
+          node-version: 22
 
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-npm-playwright-
+
+      - name: Install Playwright
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund --prefer-offline \
+            playwright-core@${PLAYWRIGHT_VERSION}
 
       - name: Verify Google Chrome
         run: |
